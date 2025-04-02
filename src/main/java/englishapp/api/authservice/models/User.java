@@ -1,4 +1,4 @@
-package englishapp.api.authservice.database.models;
+package englishapp.api.authservice.models;
 
 import java.time.LocalDateTime;
 

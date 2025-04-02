@@ -1,12 +1,17 @@
-package englishapp.api.authservice.database.repositories;
+package englishapp.api.authservice.repositories;
 
 import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
-import englishapp.api.authservice.database.models.User;
+import org.springframework.stereotype.Repository;
+import englishapp.api.authservice.models.User;
 import reactor.core.publisher.Mono;
 
+@Repository
 public interface UserRepository extends ReactiveMongoRepository<User, String> {
     Mono<User> findByUserName(String userName);
+
     Mono<User> findByEmail(String email);
+
     boolean existsByUserName(String userName);
+
     boolean existsByEmail(String email);
 }
