@@ -1,5 +1,6 @@
 package englishapp.api.authservice.repositories;
 
+import org.springframework.data.mongodb.repository.Query;
 import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
 import org.springframework.stereotype.Repository;
 
@@ -9,7 +10,9 @@ import reactor.core.publisher.Mono;
 @Repository
 public interface RefreshTokenRepository extends ReactiveMongoRepository<RefreshToken, String> {
 
-    Mono<RefreshToken> findByToken(String token);
+    @Query("{ 'rf_token': ?0 }")
+    Mono<RefreshToken> findByRfToken(String token);
 
-    Mono<Void> deleteByUserId(String userId);
+    @Query(value = "{ 'rf_token': ?0 }", delete = true)
+    Mono<Long> deleteByRfToken(String rfToken);
 }

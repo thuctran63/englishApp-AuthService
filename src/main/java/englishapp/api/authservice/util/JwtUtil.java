@@ -3,7 +3,6 @@ package englishapp.api.authservice.util;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import java.time.Instant;
@@ -27,8 +26,7 @@ public class JwtUtil {
                 .setSubject(email)
                 .setIssuedAt(new Date())
                 .setExpiration(Date.from(Instant.now().plus(jwtExpiration, ChronoUnit.SECONDS)))
-                .signWith(SignatureAlgorithm.HS256,
-                        getEncodeBase64SecretKey())
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
 
@@ -37,13 +35,16 @@ public class JwtUtil {
                 .setSubject(email)
                 .setIssuedAt(new Date())
                 .setExpiration(Date.from(Instant.now().plus(refreshExpiration, ChronoUnit.SECONDS)))
-                .signWith(SignatureAlgorithm.HS256,
-                        getEncodeBase64SecretKey())
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
 
     public Claims extractClaims(String token) {
-        return Jwts.parser().setSigningKey(getEncodeBase64SecretKey()).parseClaimsJws(token).getBody();
+        return Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
     }
 
     public String extractEmail(String token) {
@@ -58,7 +59,7 @@ public class JwtUtil {
         return (email.equals(extractEmail(token)) && !isTokenExpired(token));
     }
 
-    private String getEncodeBase64SecretKey() {
-        return java.util.Base64.getEncoder().encodeToString(secretKey.getBytes());
+    private java.security.Key getSigningKey() {
+        return new javax.crypto.spec.SecretKeySpec(secretKey.getBytes(), SignatureAlgorithm.HS256.getJcaName());
     }
 }

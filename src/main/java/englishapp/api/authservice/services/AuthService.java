@@ -1,8 +1,9 @@
 package englishapp.api.authservice.services;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
 import englishapp.api.authservice.dto.apiLogin.InputParamApiLogin;
 import englishapp.api.authservice.dto.apiLogin.OutputParamApiLogin;
 import englishapp.api.authservice.dto.apiRefreshToken.InputParamApiRefreshToken;
@@ -30,10 +31,11 @@ public class AuthService {
     private JwtUtil jwtUtil;
 
     private final PasswordUtil passwordEncoder = new PasswordUtil();
+    private static final Logger logger = LogManager.getLogger(AuthService.class);
 
     public Mono<OutputParamApiRegister> register(InputParamApiRegister inputParamApiRegister) {
         return userRepository.findByEmail(inputParamApiRegister.getEmail())
-                .flatMap(email -> Mono.<OutputParamApiRegister>error(new RuntimeException("Email already exists")))
+                .flatMap(user -> Mono.<OutputParamApiRegister>error(new RuntimeException("Email already exists")))
                 .switchIfEmpty(
                         Mono.defer(() -> {
                             User user = new User();
@@ -45,12 +47,9 @@ public class AuthService {
                             user.setUpdatedAt(LocalDateTime.now());
 
                             return userRepository.save(user)
-                                    .doOnError(error -> {
-                                        System.err.println("Error saving user: " + error.getMessage());
-                                        error.printStackTrace();
-                                    })
-                                    .doOnSuccess(savedUser -> {
-                                        System.out.println("User saved successfully: " + savedUser.getUserId());
+                                    .onErrorMap(error -> true, error -> {
+                                        logger.error("Error saving user: {}", error.getMessage(), error);
+                                        return new RuntimeException("Error saving user");
                                     })
                                     .flatMap(savedUser -> {
                                         String jwt = jwtUtil.generateToken(savedUser.getEmail());
@@ -58,19 +57,15 @@ public class AuthService {
                                         RefreshToken token = new RefreshToken(null, savedUser.getUserId(),
                                                 jwt, refreshToken,
                                                 Instant.now().plusMillis(86400000));
-
                                         return refreshTokenRepository.save(token)
-                                                .doOnError(error -> {
-                                                    System.err.println("Error saving token: " + error.getMessage());
-                                                    error.printStackTrace();
-                                                })
-                                                .doOnSuccess(savedToken -> {
-                                                    System.out
-                                                            .println("Token saved successfully: " + savedToken.getId());
+                                                .onErrorMap(error -> true, error -> {
+                                                    logger.error("Error saving token: {}", error.getMessage(), error);
+                                                    return new RuntimeException("Error saving token");
                                                 })
                                                 .map(savedToken -> {
                                                     OutputParamApiRegister outputParamApiRegister = new OutputParamApiRegister();
                                                     outputParamApiRegister.setAccessToken(jwt);
+                                                    outputParamApiRegister.setUserName(savedUser.getUserName());
                                                     outputParamApiRegister.setRefreshToken(refreshToken);
                                                     return outputParamApiRegister;
                                                 });
@@ -107,7 +102,7 @@ public class AuthService {
     }
 
     public Mono<OutputParamApiRefreshToken> refreshToken(InputParamApiRefreshToken inputParamApiRefreshToken) {
-        return refreshTokenRepository.findByToken(inputParamApiRefreshToken.getRefreshToken())
+        return refreshTokenRepository.findByRfToken(inputParamApiRefreshToken.getRefreshToken())
                 .flatMap(token -> {
                     if (token.getExpiryDate().isBefore(Instant.now())) {
                         return Mono.error(new RuntimeException("Refresh token expired"));
@@ -117,26 +112,30 @@ public class AuthService {
                                 if (user == null) {
                                     return Mono.error(new RuntimeException("User not found"));
                                 }
-                                String jwt = jwtUtil.generateToken(user.getEmail());
-                                String newRefreshToken = UUID.randomUUID().toString();
-                                RefreshToken newToken = new RefreshToken(null, user.getUserId(),
-                                        jwt, newRefreshToken,
-                                        Instant.now().plusMillis(86400000));
-                                return refreshTokenRepository.save(newToken)
-                                        .then(Mono.just(new OutputParamApiRefreshToken(jwt, newRefreshToken)));
+                                String newAccessToken = jwtUtil.generateToken(user.getEmail());
+                                // Cập nhật lại access token và expiry date trong refresh token cũ
+                                token.setToken(newAccessToken);
+                                return refreshTokenRepository.save(token)
+                                        .then(Mono.just(new OutputParamApiRefreshToken(
+                                                newAccessToken)));
                             });
                 })
                 .switchIfEmpty(Mono.error(new RuntimeException("Invalid refresh token")));
     }
 
     public Mono<Void> logout(String refreshToken) {
-        return refreshTokenRepository.deleteByUserId(refreshToken)
+        return refreshTokenRepository.deleteByRfToken(refreshToken)
                 .doOnError(error -> {
-                    System.err.println("Error deleting token: " + error.getMessage());
-                    error.printStackTrace();
+                    logger.error("Error deleting token: {}", error.getMessage(), error);
+                    throw new RuntimeException("Error deleting token");
                 })
-                .doOnSuccess(aVoid -> {
-                    System.out.println("Token deleted successfully");
+                .flatMap(deletedCount -> {
+                    if (deletedCount > 0) {
+                        logger.info("Token deleted successfully");
+                        return Mono.empty();
+                    } else {
+                        return Mono.error(new RuntimeException("No token found"));
+                    }
                 });
     }
 }

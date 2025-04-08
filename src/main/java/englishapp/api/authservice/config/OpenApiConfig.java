@@ -9,16 +9,15 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class OpenApiConfig {
-    @Bean
-    public OpenAPI customOpenAPI() {
-        return new OpenAPI()
-                .info(new Info().title("EnglishApp API Authentication Service")
-                        .description("API Authentication Service for EnglishApp")
-                        .description("API Authentication Service")
-                        .version("v1.0")
-                        .license(new License().name("Apache 2.0").url("http://springdoc.org")))
-                .externalDocs(new ExternalDocumentation()
-                        .description("EnglishApp Documentation")
-                        .url("https://englishapp.docs.com"));
-    }
+        @Bean
+        public OpenAPI customOpenAPI() {
+                return new OpenAPI()
+                                .info(new Info().title("EnglishApp API Authentication Service")
+                                                .description("API Authentication Service for EnglishApp")
+                                                .version("v1.0")
+                                                .license(new License().name("Apache 2.0").url("http://springdoc.org")))
+                                .externalDocs(new ExternalDocumentation()
+                                                .description("EnglishApp Documentation")
+                                                .url("https://englishapp.docs.com"));
+        }
 }

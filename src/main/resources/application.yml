@@ -15,23 +15,6 @@ jwt:
   expiration: 3600000
   refresh-expiration: 86400000
 
-logging:
-  level:
-    root: INFO
-    org.springframework.web: INFO
-    org.hibernate: INFO
-    your.package: DEBUG # Thay your.package bằng package của bạn
-
-  pattern:
-    console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%5p) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx"
-    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
-
-  file:
-    name: logs/application.log
-    path: ./logs
-    max-history: 7
-    max-size: 10MB
-
 springdoc:
   swagger-ui:
     path: /swagger
