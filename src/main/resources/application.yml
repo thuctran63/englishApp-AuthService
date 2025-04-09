@@ -4,17 +4,16 @@ server:
 spring:
   application:
     name: auth-service
-
   data:
     mongodb:
-      uri: ${MONGO_URI}
-      database: ${MONGO_DB}
+      uri: mongodb+srv://admin:admin@user.ctcfm.mongodb.net/?retryWrites=true&w=majority&appName=User
+      database: User
       auto-index-creation: true
 
 jwt:
-  secret: ${JWT_SECRET}
-  expiration: ${JWT_EXPIRATION:3600000} # default nếu không có env
-  refresh-expiration: ${JWT_REFRESH_EXPIRATION:86400000}
+  secret: mySuperSecretKeyThatIsAtLeast32CharactersLong
+  expiration: 3600000
+  refresh-expiration: 86400000
 
 springdoc:
   swagger-ui:
