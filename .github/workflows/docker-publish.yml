@@ -38,5 +38,5 @@ jobs:
 
       - name: Push Docker image
         run: |
-          docker push thuctran63/springboot-webflux:latest
-          docker push thuctran63/springboot-webflux:${{ github.sha }}
+          docker push thuctran63/ea-authservice:latest
+          docker push thuctran63/ea-authservice:${{ github.sha }}
