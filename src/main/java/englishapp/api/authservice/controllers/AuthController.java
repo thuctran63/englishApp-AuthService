@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import api.common.englishapp.requests.CommonResponse;
 import api.common.englishapp.requests.ResponseUtil;
+import englishapp.api.authservice.dto.apiCheckToken.InputParamApiCheckToken;
+import englishapp.api.authservice.dto.apiGetToken.InputParamApiGetToken;
 import englishapp.api.authservice.dto.apiLogin.InputParamApiLogin;
 import englishapp.api.authservice.dto.apiLogout.InputParamApiLogout;
 import englishapp.api.authservice.dto.apiRefreshToken.InputParamApiRefreshToken;
@@ -80,6 +82,34 @@ public class AuthController {
                 })
                 .onErrorResume(error -> {
                     logger.error("Error during logout: {}", error.getMessage());
+                    return Mono.just(ResponseUtil.serverError(error.getMessage()));
+                });
+    }
+
+    @PostMapping("/checkToken")
+    @Operation(summary = "Kiểm tra token", description = "Xác thực tính hợp lệ của token")
+    public Mono<ResponseEntity<CommonResponse<?>>> checkToken(@RequestBody InputParamApiCheckToken input) {
+        return authService.checkToken(input)
+                .map(data -> {
+                    logger.info("Token is valid");
+                    return ResponseUtil.ok(data);
+                })
+                .onErrorResume(error -> {
+                    logger.error("Error during token check: {}", error.getMessage());
+                    return Mono.just(ResponseUtil.serverError(error.getMessage()));
+                });
+    }
+
+    @PostMapping("/getToken")
+    @Operation(summary = "Lấy token", description = "Cung cấp token mới dựa vào refresh token")
+    public Mono<ResponseEntity<CommonResponse<?>>> getToken(@RequestBody InputParamApiGetToken input) {
+        return authService.getToken(input)
+                .map(data -> {
+                    logger.info("Token retrieved successfully");
+                    return ResponseUtil.ok(data);
+                })
+                .onErrorResume(error -> {
+                    logger.error("Error during token retrieval: {}", error.getMessage());
                     return Mono.just(ResponseUtil.serverError(error.getMessage()));
                 });
     }

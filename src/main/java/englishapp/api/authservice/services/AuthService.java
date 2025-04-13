@@ -4,6 +4,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import englishapp.api.authservice.dto.apiCheckToken.InputParamApiCheckToken;
+import englishapp.api.authservice.dto.apiGetToken.InputParamApiGetToken;
+import englishapp.api.authservice.dto.apiGetToken.OutputParamApiGetToken;
 import englishapp.api.authservice.dto.apiLogin.InputParamApiLogin;
 import englishapp.api.authservice.dto.apiLogin.OutputParamApiLogin;
 import englishapp.api.authservice.dto.apiRefreshToken.InputParamApiRefreshToken;
@@ -137,5 +141,40 @@ public class AuthService {
                         return Mono.error(new RuntimeException("No token found"));
                     }
                 });
+    }
+
+    public Mono<Void> checkToken(InputParamApiCheckToken inputParamCheckToken) {
+        return Mono.just(inputParamCheckToken)
+                .flatMap(input -> {
+                    if (!jwtUtil.validateToken(input.getToken(), input.getEmail())) {
+                        return Mono.<Void>error(new RuntimeException("Token invalid"));
+                    }
+                    return Mono.empty();
+                })
+                .doOnError(error -> {
+                    logger.error("Error checking token: {}", error.getMessage());
+                });
+    }
+
+    public Mono<OutputParamApiGetToken> getToken(InputParamApiGetToken inputParamApiGetToken) {
+        return refreshTokenRepository.findByRfToken(inputParamApiGetToken.getRefreshToken())
+                .flatMap(token -> {
+                    if (token.getExpiryDate().isBefore(Instant.now())) {
+                        return Mono.error(new RuntimeException("Refresh token expired"));
+                    }
+                    return userRepository.findById(token.getUserId())
+                            .flatMap(user -> {
+                                if (user == null) {
+                                    return Mono.error(new RuntimeException("User not found"));
+                                }
+                                String newAccessToken = jwtUtil.generateToken(user.getEmail());
+                                // Cập nhật lại access token và expiry date trong refresh token cũ
+                                token.setToken(newAccessToken);
+                                return refreshTokenRepository.save(token)
+                                        .then(Mono.just(new OutputParamApiGetToken(
+                                                newAccessToken)));
+                            });
+                })
+                .switchIfEmpty(Mono.error(new RuntimeException("Invalid refresh token")));
     }
 }
