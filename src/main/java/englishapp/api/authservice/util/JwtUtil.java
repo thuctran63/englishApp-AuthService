@@ -21,20 +21,12 @@ public class JwtUtil {
     @Value("${jwt.refresh-expiration}")
     private long refreshExpiration;
 
-    public String generateToken(String email) {
+    public String generateToken(String idUser, String email) {
         return Jwts.builder()
                 .setSubject(email)
+                .claim("idUser", idUser)
                 .setIssuedAt(new Date())
                 .setExpiration(Date.from(Instant.now().plus(jwtExpiration, ChronoUnit.SECONDS)))
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
-                .compact();
-    }
-
-    public String generateRefreshToken(String email) {
-        return Jwts.builder()
-                .setSubject(email)
-                .setIssuedAt(new Date())
-                .setExpiration(Date.from(Instant.now().plus(refreshExpiration, ChronoUnit.SECONDS)))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }

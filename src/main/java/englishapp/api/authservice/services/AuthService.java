@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import englishapp.api.authservice.dto.apiCheckToken.InputParamApiCheckToken;
+import englishapp.api.authservice.dto.apiCheckToken.OutputParamApiCheckToken;
 import englishapp.api.authservice.dto.apiGetToken.InputParamApiGetToken;
 import englishapp.api.authservice.dto.apiGetToken.OutputParamApiGetToken;
 import englishapp.api.authservice.dto.apiLogin.InputParamApiLogin;
@@ -20,6 +21,7 @@ import englishapp.api.authservice.repositories.RefreshTokenRepository;
 import englishapp.api.authservice.repositories.UserRepository;
 import englishapp.api.authservice.util.JwtUtil;
 import englishapp.api.authservice.util.PasswordUtil;
+import io.jsonwebtoken.Claims;
 import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -56,7 +58,7 @@ public class AuthService {
                                         return new RuntimeException("Error saving user");
                                     })
                                     .flatMap(savedUser -> {
-                                        String jwt = jwtUtil.generateToken(savedUser.getEmail());
+                                        String jwt = jwtUtil.generateToken(savedUser.getUserId(), savedUser.getEmail());
                                         String refreshToken = UUID.randomUUID().toString();
                                         RefreshToken token = new RefreshToken(null, savedUser.getUserId(),
                                                 jwt, refreshToken,
@@ -84,7 +86,7 @@ public class AuthService {
                         return Mono.<OutputParamApiLogin>error(new RuntimeException("Invalid credentials"));
                     }
 
-                    String jwt = jwtUtil.generateToken(user.getEmail());
+                    String jwt = jwtUtil.generateToken(user.getUserId(), user.getEmail());
                     String refreshToken = UUID.randomUUID().toString();
                     RefreshToken token = new RefreshToken(null, user.getUserId(),
                             jwt, refreshToken,
@@ -116,7 +118,7 @@ public class AuthService {
                                 if (user == null) {
                                     return Mono.error(new RuntimeException("User not found"));
                                 }
-                                String newAccessToken = jwtUtil.generateToken(user.getEmail());
+                                String newAccessToken = jwtUtil.generateToken(user.getUserId(), user.getEmail());
                                 // Cập nhật lại access token và expiry date trong refresh token cũ
                                 token.setToken(newAccessToken);
                                 return refreshTokenRepository.save(token)
@@ -143,13 +145,22 @@ public class AuthService {
                 });
     }
 
-    public Mono<Void> checkToken(InputParamApiCheckToken inputParamCheckToken) {
+    public Mono<OutputParamApiCheckToken> checkToken(InputParamApiCheckToken inputParamCheckToken) {
         return Mono.just(inputParamCheckToken)
                 .flatMap(input -> {
-                    if (!jwtUtil.validateToken(input.getToken(), input.getEmail())) {
-                        return Mono.<Void>error(new RuntimeException("Token invalid"));
-                    }
-                    return Mono.empty();
+                    Claims claims = jwtUtil.extractClaims(input.getToken());
+                    String userId = claims.get("idUser", String.class);
+                    return userRepository.findById(userId)
+                            .flatMap(user -> {
+                                if (user == null) {
+                                    return Mono.error(new RuntimeException("User not found"));
+                                }
+                                if (!jwtUtil.validateToken(input.getToken(), user.getEmail())) {
+                                    return Mono.error(new RuntimeException("Invalid token"));
+                                }
+                                return Mono.just(new OutputParamApiCheckToken(
+                                        user.getUserId(), user.getEmail()));
+                            });
                 })
                 .doOnError(error -> {
                     logger.error("Error checking token: {}", error.getMessage());
@@ -167,7 +178,7 @@ public class AuthService {
                                 if (user == null) {
                                     return Mono.error(new RuntimeException("User not found"));
                                 }
-                                String newAccessToken = jwtUtil.generateToken(user.getEmail());
+                                String newAccessToken = jwtUtil.generateToken(user.getUserId(), user.getEmail());
                                 // Cập nhật lại access token và expiry date trong refresh token cũ
                                 token.setToken(newAccessToken);
                                 return refreshTokenRepository.save(token)
