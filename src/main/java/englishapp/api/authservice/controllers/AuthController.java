@@ -5,16 +5,17 @@ import org.apache.logging.log4j.Logger;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import api.common.englishapp.requests.CommonResponse;
 import api.common.englishapp.requests.ResponseUtil;
-import englishapp.api.authservice.dto.apiCheckToken.InputParamApiCheckToken;
-import englishapp.api.authservice.dto.apiGetToken.InputParamApiGetToken;
+import englishapp.api.authservice.dto.apiCheckEmail.InputParamApiCheckEmail;
+import englishapp.api.authservice.dto.apiCheckOTP.InputParamApiCheckOTP;
 import englishapp.api.authservice.dto.apiLogin.InputParamApiLogin;
 import englishapp.api.authservice.dto.apiLogout.InputParamApiLogout;
 import englishapp.api.authservice.dto.apiRefreshToken.InputParamApiRefreshToken;
 import englishapp.api.authservice.dto.apiRegister.InputParamApiRegister;
+import englishapp.api.authservice.dto.apiResetPassword.InputPramApiResetPassword;
 import englishapp.api.authservice.services.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,7 +23,6 @@ import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
 
 @RestController
-@RequestMapping("/auth")
 @RequiredArgsConstructor
 @Tag(name = "Authentication", description = "APIs liên quan đến xác thực người dùng")
 public class AuthController {
@@ -86,10 +86,15 @@ public class AuthController {
                 });
     }
 
-    @PostMapping("/checkToken")
     @Operation(summary = "Kiểm tra token", description = "Xác thực tính hợp lệ của token")
-    public Mono<ResponseEntity<CommonResponse<?>>> checkToken(@RequestBody InputParamApiCheckToken input) {
-        return authService.checkToken(input)
+    @PostMapping("/checkToken") // Thêm endpoint mapping
+    public Mono<ResponseEntity<CommonResponse<?>>> checkToken(@RequestHeader("Authorization") String token) {
+        // Loại bỏ "Bearer " nếu có
+        if (token != null && token.startsWith("Bearer ")) {
+            token = token.substring(7);
+        }
+
+        return authService.checkToken(token)
                 .map(data -> {
                     logger.info("Token is valid");
                     return ResponseUtil.ok(data);
@@ -100,16 +105,49 @@ public class AuthController {
                 });
     }
 
-    @PostMapping("/getToken")
-    @Operation(summary = "Lấy token", description = "Cung cấp token mới dựa vào refresh token")
-    public Mono<ResponseEntity<CommonResponse<?>>> getToken(@RequestBody InputParamApiGetToken input) {
-        return authService.getToken(input)
+    @PostMapping("/checkEmail")
+    @Operation(summary = "Kiểm tra email", description = "Kiểm tra xem email đã tồn tại hay chưa")
+    public Mono<ResponseEntity<CommonResponse<?>>> checkEmail(@RequestBody InputParamApiCheckEmail input) {
+        return authService.checkEmail(
+                input.getEmail())
                 .map(data -> {
-                    logger.info("Token retrieved successfully");
+                    logger.info("Email check completed");
                     return ResponseUtil.ok(data);
                 })
                 .onErrorResume(error -> {
-                    logger.error("Error during token retrieval: {}", error.getMessage());
+                    logger.error("Error during email check: {}", error.getMessage());
+                    return Mono.just(ResponseUtil.serverError(error.getMessage()));
+                });
+    }
+
+    @PostMapping("/checkOTP")
+    @Operation(summary = "Kiểm tra OTP", description = "Xác thực mã OTP được gửi đến email")
+    public Mono<ResponseEntity<CommonResponse<?>>> checkOTP(@RequestBody InputParamApiCheckOTP input) {
+        return authService.verifyOtp(
+                input.getEmail(),
+                input.getOtpCode())
+                .map(data -> {
+                    logger.info("OTP check completed");
+                    return ResponseUtil.ok(data);
+                })
+                .onErrorResume(error -> {
+                    logger.error("Error during OTP check: {}", error.getMessage());
+                    return Mono.just(ResponseUtil.serverError(error.getMessage()));
+                });
+    }
+
+    @PostMapping("/resetPassword")
+    @Operation(summary = "Đặt lại mật khẩu", description = "Cung cấp chức năng đặt lại mật khẩu cho người dùng")
+    public Mono<ResponseEntity<CommonResponse<?>>> resetPassword(@RequestBody InputPramApiResetPassword input) {
+        return authService.resetPassword(
+                input.getEmail(),
+                input.getNewPassword())
+                .map(data -> {
+                    logger.info("Password reset completed");
+                    return ResponseUtil.ok(data);
+                })
+                .onErrorResume(error -> {
+                    logger.error("Error during password reset: {}", error.getMessage());
                     return Mono.just(ResponseUtil.serverError(error.getMessage()));
                 });
     }

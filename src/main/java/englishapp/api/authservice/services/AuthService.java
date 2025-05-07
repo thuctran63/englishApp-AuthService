@@ -3,12 +3,9 @@ package englishapp.api.authservice.services;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
-
-import englishapp.api.authservice.dto.apiCheckToken.InputParamApiCheckToken;
 import englishapp.api.authservice.dto.apiCheckToken.OutputParamApiCheckToken;
-import englishapp.api.authservice.dto.apiGetToken.InputParamApiGetToken;
-import englishapp.api.authservice.dto.apiGetToken.OutputParamApiGetToken;
 import englishapp.api.authservice.dto.apiLogin.InputParamApiLogin;
 import englishapp.api.authservice.dto.apiLogin.OutputParamApiLogin;
 import englishapp.api.authservice.dto.apiRefreshToken.InputParamApiRefreshToken;
@@ -25,7 +22,9 @@ import io.jsonwebtoken.Claims;
 import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Random;
 import java.util.UUID;
+import java.time.Duration;
 
 @Service
 public class AuthService {
@@ -35,6 +34,10 @@ public class AuthService {
     private RefreshTokenRepository refreshTokenRepository;
     @Autowired
     private JwtUtil jwtUtil;
+    @Autowired
+    private EmailService emailService;
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate; // Assuming you have a RedisTemplate bean configured
 
     private final PasswordUtil passwordEncoder = new PasswordUtil();
     private static final Logger logger = LogManager.getLogger(AuthService.class);
@@ -49,6 +52,7 @@ public class AuthService {
                             user.setPassword(passwordEncoder.hashPassword(inputParamApiRegister.getPassword()));
                             user.setUserName(inputParamApiRegister.getUserName());
                             user.setTypeUser(0);
+                            user.setRole("USER");
                             user.setCreatedAt(LocalDateTime.now());
                             user.setUpdatedAt(LocalDateTime.now());
 
@@ -58,7 +62,8 @@ public class AuthService {
                                         return new RuntimeException("Error saving user");
                                     })
                                     .flatMap(savedUser -> {
-                                        String jwt = jwtUtil.generateToken(savedUser.getUserId(), savedUser.getEmail());
+                                        String jwt = jwtUtil.generateToken(savedUser.getUserId(), savedUser.getEmail(),
+                                                savedUser.getRole());
                                         String refreshToken = UUID.randomUUID().toString();
                                         RefreshToken token = new RefreshToken(null, savedUser.getUserId(),
                                                 jwt, refreshToken,
@@ -86,7 +91,7 @@ public class AuthService {
                         return Mono.<OutputParamApiLogin>error(new RuntimeException("Invalid credentials"));
                     }
 
-                    String jwt = jwtUtil.generateToken(user.getUserId(), user.getEmail());
+                    String jwt = jwtUtil.generateToken(user.getUserId(), user.getEmail(), user.getRole());
                     String refreshToken = UUID.randomUUID().toString();
                     RefreshToken token = new RefreshToken(null, user.getUserId(),
                             jwt, refreshToken,
@@ -118,7 +123,8 @@ public class AuthService {
                                 if (user == null) {
                                     return Mono.error(new RuntimeException("User not found"));
                                 }
-                                String newAccessToken = jwtUtil.generateToken(user.getUserId(), user.getEmail());
+                                String newAccessToken = jwtUtil.generateToken(user.getUserId(), user.getEmail(),
+                                        user.getRole());
                                 // Cập nhật lại access token và expiry date trong refresh token cũ
                                 token.setToken(newAccessToken);
                                 return refreshTokenRepository.save(token)
@@ -135,57 +141,80 @@ public class AuthService {
                     logger.error("Error deleting token: {}", error.getMessage(), error);
                     throw new RuntimeException("Error deleting token");
                 })
-                .flatMap(deletedCount -> {
-                    if (deletedCount > 0) {
-                        logger.info("Token deleted successfully");
-                        return Mono.empty();
-                    } else {
-                        return Mono.error(new RuntimeException("No token found"));
-                    }
+                .then(Mono.fromRunnable(() -> {
+                    logger.info("Token deleted successfully");
+                }));
+    }
+
+    public Mono<OutputParamApiCheckToken> checkToken(String token) {
+        return Mono.defer(() -> {
+            Claims claims;
+            try {
+                claims = jwtUtil.extractClaims(token);
+            } catch (Exception ex) {
+                return Mono.error(new RuntimeException("Invalid or expired token"));
+            }
+
+            String userId = claims.get("idUser", String.class);
+            return userRepository.findById(userId)
+                    .switchIfEmpty(Mono.error(new RuntimeException("User not found")))
+                    .flatMap(user -> {
+                        if (!jwtUtil.validateToken(token, user.getEmail())) {
+                            return Mono.error(new RuntimeException("Invalid token"));
+                        }
+
+                        return Mono.just(new OutputParamApiCheckToken(
+                                user.getUserId(), user.getEmail(), user.getRole()));
+                    });
+        }).doOnError(error -> logger.error("Error checking token: {}", error.getMessage()));
+    }
+
+    public Mono<Void> checkEmail(String email) {
+        return userRepository.findByEmail(email)
+                .doOnSuccess(user -> logger.info("Found user: {}", user))
+                .flatMap(user -> {
+                    // Tạo mã OTP ngẫu nhiên 6 chữ số
+                    String otp = String.valueOf(new Random().nextInt(900_000) + 100_000);
+                    String redisKey = "reset_otp:" + email;
+                    logger.info("Generated OTP: {} for email: {}", otp, email);
+
+                    // Lưu OTP vào Redis với TTL 5 phút và gửi email
+                    redisTemplate.opsForValue().set(redisKey, otp, Duration.ofMinutes(5));
+                    logger.info("Saved OTP to Redis with key: {}", redisKey);
+
+                    return emailService.sendEmail(email, "Reset Password OTP", "Your OTP is: " + otp)
+                            .doOnSuccess(v -> logger.info("Email sent successfully to: {}", email))
+                            .doOnError(error -> logger.error("Error sending email: {}", error.getMessage()));
+                })
+                .onErrorResume(error -> {
+                    logger.error("Error in checkEmail: {}", error.getMessage(), error);
+                    return Mono.empty();
                 });
     }
 
-    public Mono<OutputParamApiCheckToken> checkToken(InputParamApiCheckToken inputParamCheckToken) {
-        return Mono.just(inputParamCheckToken)
-                .flatMap(input -> {
-                    Claims claims = jwtUtil.extractClaims(input.getToken());
-                    String userId = claims.get("idUser", String.class);
-                    return userRepository.findById(userId)
-                            .flatMap(user -> {
-                                if (user == null) {
-                                    return Mono.error(new RuntimeException("User not found"));
-                                }
-                                if (!jwtUtil.validateToken(input.getToken(), user.getEmail())) {
-                                    return Mono.error(new RuntimeException("Invalid token"));
-                                }
-                                return Mono.just(new OutputParamApiCheckToken(
-                                        user.getUserId(), user.getEmail()));
-                            });
-                })
-                .doOnError(error -> {
-                    logger.error("Error checking token: {}", error.getMessage());
-                });
+    public Mono<Void> verifyOtp(String email, String otp) {
+        String redisKey = "reset_otp:" + email;
+        String storedOtp = redisTemplate.opsForValue().get(redisKey);
+
+        if (storedOtp == null) {
+            return Mono.error(new RuntimeException("OTP expired or not found"));
+        }
+
+        if (!storedOtp.equals(otp)) {
+            return Mono.error(new RuntimeException("Invalid OTP"));
+        }
+        redisTemplate.delete(redisKey);
+        return Mono.empty();
     }
 
-    public Mono<OutputParamApiGetToken> getToken(InputParamApiGetToken inputParamApiGetToken) {
-        return refreshTokenRepository.findByRfToken(inputParamApiGetToken.getRefreshToken())
-                .flatMap(token -> {
-                    if (token.getExpiryDate().isBefore(Instant.now())) {
-                        return Mono.error(new RuntimeException("Refresh token expired"));
-                    }
-                    return userRepository.findById(token.getUserId())
-                            .flatMap(user -> {
-                                if (user == null) {
-                                    return Mono.error(new RuntimeException("User not found"));
-                                }
-                                String newAccessToken = jwtUtil.generateToken(user.getUserId(), user.getEmail());
-                                // Cập nhật lại access token và expiry date trong refresh token cũ
-                                token.setToken(newAccessToken);
-                                return refreshTokenRepository.save(token)
-                                        .then(Mono.just(new OutputParamApiGetToken(
-                                                newAccessToken)));
-                            });
+    public Mono<Void> resetPassword(String email, String newPassword) {
+        return userRepository.findByEmail(email)
+                .flatMap(user -> {
+                    user.setPassword(passwordEncoder.hashPassword(newPassword));
+                    return userRepository.save(user)
+                            .then();
                 })
-                .switchIfEmpty(Mono.error(new RuntimeException("Invalid refresh token")));
+                .doOnSuccess(v -> logger.info("Password reset successfully for email: {}", email))
+                .doOnError(error -> logger.error("Error resetting password: {}", error.getMessage()));
     }
 }

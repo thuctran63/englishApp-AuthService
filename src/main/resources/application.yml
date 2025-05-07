@@ -9,6 +9,17 @@ spring:
       uri: mongodb+srv://admin:admin@user.ctcfm.mongodb.net/?retryWrites=true&w=majority&appName=User
       database: User
       auto-index-creation: true
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: tranduythuc2003@gmail.com
+    password: snrhemfctcijtxlo
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 jwt:
   secret: mySuperSecretKeyThatIsAtLeast32CharactersLong

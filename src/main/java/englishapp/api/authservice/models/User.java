@@ -44,6 +44,9 @@ public class User {
     @Field("password")
     private String password;
 
+    @Field("role")
+    private String role;
+
     @CreatedDate
     @Field("created_at")
     private LocalDateTime createdAt;

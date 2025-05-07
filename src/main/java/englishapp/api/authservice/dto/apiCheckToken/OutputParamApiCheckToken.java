@@ -8,4 +8,5 @@ import lombok.Data;
 public class OutputParamApiCheckToken {
     private String userId;
     private String email;
+    private String role;
 }

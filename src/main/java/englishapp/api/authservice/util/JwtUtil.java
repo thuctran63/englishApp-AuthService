@@ -21,10 +21,11 @@ public class JwtUtil {
     @Value("${jwt.refresh-expiration}")
     private long refreshExpiration;
 
-    public String generateToken(String idUser, String email) {
+    public String generateToken(String idUser, String email, String role) {
         return Jwts.builder()
                 .setSubject(email)
                 .claim("idUser", idUser)
+                .claim("role", role) // 👈 Thêm dòng này
                 .setIssuedAt(new Date())
                 .setExpiration(Date.from(Instant.now().plus(jwtExpiration, ChronoUnit.SECONDS)))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
@@ -37,6 +38,10 @@ public class JwtUtil {
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
+    }
+
+    public String extractRole(String token) {
+        return extractClaims(token).get("role", String.class);
     }
 
     public String extractEmail(String token) {
