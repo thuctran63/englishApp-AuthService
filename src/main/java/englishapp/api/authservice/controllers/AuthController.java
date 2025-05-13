@@ -2,11 +2,14 @@ package englishapp.api.authservice.controllers;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+
 import api.common.englishapp.requests.CommonResponse;
 import api.common.englishapp.requests.ResponseUtil;
 import englishapp.api.authservice.dto.apiCheckEmail.InputParamApiCheckEmail;
@@ -108,13 +111,16 @@ public class AuthController {
     @PostMapping("/checkEmail")
     @Operation(summary = "Kiểm tra email", description = "Kiểm tra xem email đã tồn tại hay chưa")
     public Mono<ResponseEntity<CommonResponse<?>>> checkEmail(@RequestBody InputParamApiCheckEmail input) {
-        return authService.checkEmail(
-                input.getEmail())
+        return authService.checkEmail(input.getEmail())
                 .map(data -> {
                     logger.info("Email check completed");
                     return ResponseUtil.ok(data);
                 })
                 .onErrorResume(error -> {
+                    if (error instanceof ResponseStatusException statusException &&
+                            statusException.getStatusCode() == HttpStatus.NO_CONTENT) {
+                        return Mono.just(ResponseUtil.noContent());
+                    }
                     logger.error("Error during email check: {}", error.getMessage());
                     return Mono.just(ResponseUtil.serverError(error.getMessage()));
                 });

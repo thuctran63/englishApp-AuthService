@@ -4,7 +4,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
 import englishapp.api.authservice.dto.apiCheckToken.OutputParamApiCheckToken;
 import englishapp.api.authservice.dto.apiLogin.InputParamApiLogin;
 import englishapp.api.authservice.dto.apiLogin.OutputParamApiLogin;
@@ -106,6 +109,7 @@ public class AuthService {
                                 outputParamApiLogin.setUserName(user.getUserName());
                                 outputParamApiLogin.setEmail(user.getEmail());
                                 outputParamApiLogin.setTypeUser(user.getTypeUser());
+                                outputParamApiLogin.setRole(user.getRole());
                                 return outputParamApiLogin;
                             });
                 })
@@ -171,6 +175,7 @@ public class AuthService {
 
     public Mono<Void> checkEmail(String email) {
         return userRepository.findByEmail(email)
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NO_CONTENT, "Email not found")))
                 .doOnSuccess(user -> logger.info("Found user: {}", user))
                 .flatMap(user -> {
                     // Tạo mã OTP ngẫu nhiên 6 chữ số
@@ -188,7 +193,7 @@ public class AuthService {
                 })
                 .onErrorResume(error -> {
                     logger.error("Error in checkEmail: {}", error.getMessage(), error);
-                    return Mono.empty();
+                    return Mono.error(error); // giữ nguyên lỗi để controller xử lý
                 });
     }
 

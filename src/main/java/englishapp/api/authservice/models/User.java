@@ -47,6 +47,9 @@ public class User {
     @Field("role")
     private String role;
 
+    @Field("block_endpoint")
+    private String blockEndpoint;
+
     @CreatedDate
     @Field("created_at")
     private LocalDateTime createdAt;
