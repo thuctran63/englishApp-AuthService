@@ -40,7 +40,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
 	testImplementation 'io.projectreactor:reactor-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-	implementation files('libs/api-common-englishapp-1.0.0.jar')
+	implementation files('libs/api-common-englishapp-1.0.1.jar')
 }
 
 tasks.named('test') {

@@ -168,7 +168,7 @@ public class AuthService {
                         }
 
                         return Mono.just(new OutputParamApiCheckToken(
-                                user.getUserId(), user.getEmail(), user.getRole()));
+                                user.getUserId(), user.getEmail(), user.getRole(), user.getListBlockEndpoint()));
                     });
         }).doOnError(error -> logger.error("Error checking token: {}", error.getMessage()));
     }
