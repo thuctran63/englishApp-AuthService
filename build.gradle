@@ -43,6 +43,11 @@ dependencies {
 	implementation files('libs/api-common-englishapp-1.0.1.jar')
 }
 
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += ['-parameters']
+}
+
+
 tasks.named('test') {
 	useJUnitPlatform()
 }
